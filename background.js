@@ -22,8 +22,19 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
-// Tabs whose panel is open, so it comes back after a reload or navigation in that tab.
+// Per-tab state: whether the panel is open (so it comes back after a reload or navigation in that
+// tab), whether auto-run is on, and the last snippet run in the tab with the site it ran on.
 const openKey = (tabId) => `open:${tabId}`;
+const autoKey = (tabId) => `auto:${tabId}`;
+const lastKey = (tabId) => `last:${tabId}`;
+
+const originOf = (url) => {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return '';
+  }
+};
 
 chrome.webNavigation.onDOMContentLoaded.addListener(async ({ tabId, frameId }) => {
   if (frameId !== 0) return;
@@ -32,18 +43,35 @@ chrome.webNavigation.onDOMContentLoaded.addListener(async ({ tabId, frameId }) =
   if (open) injectPanel(tabId, true).catch(() => {});
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(openKey(tabId)));
+chrome.tabs.onRemoved.addListener((tabId) =>
+  chrome.storage.session.remove([openKey(tabId), autoKey(tabId), lastKey(tabId)]),
+);
+
+const setFlag = (key, on) => (on ? chrome.storage.session.set({ [key]: true }) : chrome.storage.session.remove(key));
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!sender.tab) return;
-  if (msg?.type === 'panel') {
-    const key = openKey(sender.tab.id);
-    msg.open ? chrome.storage.session.set({ [key]: true }) : chrome.storage.session.remove(key);
-    return;
+  const tabId = sender.tab.id;
+  switch (msg?.type) {
+    case 'panel':
+      setFlag(openKey(tabId), msg.open);
+      return;
+    case 'auto':
+      setFlag(autoKey(tabId), msg.on);
+      return;
+    case 'state':
+      // The last snippet only comes back on the site it ran on, not wherever the tab navigates to.
+      chrome.storage.session.get([autoKey(tabId), lastKey(tabId)]).then((s) => {
+        const last = s[lastKey(tabId)];
+        const sameSite = last && last.origin === originOf(sender.url);
+        sendResponse({ auto: !!s[autoKey(tabId)], last: sameSite ? last.code : undefined });
+      });
+      return true;
+    case 'run':
+      chrome.storage.session.set({ [lastKey(tabId)]: { code: msg.code, origin: originOf(sender.url) } });
+      run(tabId, msg.code).then(sendResponse, (e) => sendResponse({ error: String(e?.message || e) }));
+      return true;
   }
-  if (msg?.type !== 'run') return;
-  run(sender.tab.id, msg.code).then(sendResponse, (e) => sendResponse({ error: String(e?.message || e) }));
-  return true;
 });
 
 async function run(tabId, code) {

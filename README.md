@@ -23,6 +23,9 @@ in the bottom-right corner where you can run JavaScript on that page, like the D
 | Esc | Hide the panel |
 
 - The panel stays open in that tab when you reload or go to another page. Close it with ✕ or Esc to stop that. The output starts empty after each reload; your snippets stay in ↑ history.
+- Drag the panel by its title bar to move it; it remembers the spot. Double-click the title bar to put it back in the corner.
+- Drag any edge or corner to resize it; it remembers the size. **⤢** switches between the small and big preset sizes and drops a custom size.
+- Turn on **↻** (auto-run) to run the last snippet again every time the page reloads. It's per tab, needs the panel open, and only re-runs on the same site the snippet last ran on. Auto-run snippets show with a ↻ in the output.
 - Code runs in the page's own JavaScript context, so page globals (`window.app`, jQuery, ...) are available.
 - `console.log/info/warn/error` output and uncaught errors from the page show up in the panel after the first run.
 - Returned promises are awaited and their value is shown.
